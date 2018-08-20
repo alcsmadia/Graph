@@ -4,31 +4,34 @@ import matplotlib.pyplot as plt # プロット
 import numpy as np # 数学ライブラリ
 import os
 
-# --------- 定数
-def parameter(x): # ファイル名から変数を読む関数
-    return(os.path.basename(sys.argv[1]).split(" ")[x]) # csv名を空白で区切ったx番目
-frequency  = int(parameter(1).replace("kHz", "" ))
-N          = parameter(4).replace("n", "-").split("-")
-N          = [N[0], int(N[1]), int(N[2])]
-renji      = float(parameter(7).replace("range.csv", "" ))
-
-T = 1 / (frequency * 10**3) * 10**6 # 周期(μs）
-dt = renji / 2000
-point_float = 2000 * T / renji # ポイント数...ポイント数*レンジ/周期(秒)=2000
-point = round(point_float)
-
-DCCT_late_time = 6*10**(-3) # μs
-DCCT_late = round(point * DCCT_late_time / T)
-
-fourier = 161 #
-
-jirotyo = 0.031852683 #エクセルでは外径と内径から計算している
-jiromenseki = 0.00001207
-
 # --------- ファイルをpandasで読む ---------
 data = pd.read_csv(sys.argv[1], engine='python', header=1)
 #data = pd.read_csv('C:\\Users\\Hidenori\\Desktop\\2121.csv', engine='python', header=1)
 data.columns=["Time", "Ch1", "Ch2"] # 読み込んだファイルに列名をつける
+
+# ----------------- 定数 -------------------
+def parameter(x): # ファイル名から変数を読む関数
+    return(os.path.basename(sys.argv[1]).split(" ")[x]) # csv名を空白で区切ったx番目
+frequency   = float(parameter(1).replace("kHz", "" ))
+N           = parameter(5).replace("n", "-").split("-")
+N           = [N[0], int(N[1]), int(N[2])]
+renji       = float(parameter(6).replace("range.csv", "" ))
+
+# frequency = 1125
+# N         = [0, 3, 1]
+# renji     = 1.08
+
+T           = 1 / (frequency * 10**3) * 10**6 # 周期(μs）
+point_all   = len(data) # 列数
+dt          = renji / point_all
+point_float = T / dt # 1周期ポイント数=全ポイント数/レンジ(個/秒)*周期(秒)
+point       = int(round(point_float)) # 丸めてからint型に
+
+DCCT_late_time = 6*10**(-3) # μs
+DCCT_late = round(point * DCCT_late_time / T)
+
+jirotyo = 0.031852683 # エクセルでは外径と内径から計算している
+jiromenseki = 0.00001207
 
 # 読み込んだデータフレームの加工
 Current_late  = data['Ch1'].shift(-int(DCCT_late)) # Ch1の列をDCCTの遅れ分ずらす
@@ -78,10 +81,12 @@ H             = i_BH * N[1] / jirotyo # Hl=Ni
 B             = int_v_BH_dt / (N[2] * jiromenseki) #NBA=∫vdt
 B_fix         = B-(B.max() + B.min())/2
 
-print("周波数 %d kHz" % frequency)
+print("周波数 %f kHz" % frequency)
 print("巻数   %d：%d" % (N[1], N[2]))
-print("レンジ %d"     % renji)
-print("Bm     %f"     % B_fix.max())
+print("レンジ %f"     % renji)
+print("Bm                                                                     %f"     % B_fix.max())
+a, b = np.polyfit(TimeT.iloc[v_half-30:v_half], B_fix.iloc[v_half-30:v_half], 1) # 線形回帰
+print("dB/dt  %f"     % a)
 
 # --------- 描写 -----------
 fig = plt.figure(figsize=(5,4)) # グラフを表示する
@@ -117,6 +122,7 @@ ax4.legend()
 
 # 空き
 ax5 = fig.add_subplot(2, 2, 4)
+#ax5.plot(TimeT.iloc[v_half-30:v_half], B_fix.iloc[v_half-30:v_half], marker="o")
 ax5.axis('off')
 
 # 共通
