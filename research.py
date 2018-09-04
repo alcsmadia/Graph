@@ -112,7 +112,7 @@ for j in range(1, len(sys.argv)):
     ax2.set_ylabel("Voltage [V]")
 
     # BHループ
-    ax3 = fig.add_subplot(2, 2, 2) # 2行2列分割レイアウトの順序2にaxes追加
+    ax3 = fig.add_subplot(2, 2, 3) # 2行2列分割レイアウトの順序2にaxes追加
     ax3.plot(H, B_fix, marker="None", linewidth = 0.5)
     # ax3.set_xlim([-60,60])
     # ax3.set_ylim([-0.5,0.5])
@@ -122,7 +122,7 @@ for j in range(1, len(sys.argv)):
     ax3.set_xlabel("H(Magnetic field intensity) [A/m]")
 
     # iの成分
-    ax4 = fig.add_subplot(2, 2, 3)
+    ax4 = fig.add_subplot(2, 2, 2)
     ax4.plot(TimeT, i_m, marker="None", label="$i_m$", color='b', linewidth = 0.5)
     ax4.plot(TimeT, i_hf, marker="None", label="$i_h+i_f$", color='skyblue', linewidth = 0.5)
     ax4.set_ylabel("Current [A]")
