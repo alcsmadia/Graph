@@ -1,7 +1,10 @@
 import sys #ドラッグドロップ
 import pandas as pd # csvを開く
+#import matplotlib
+#matplotlib.use('Agg') # -----(1)
 import matplotlib.pyplot as plt # プロット
 import numpy as np # 数学ライブラリ
+from scipy import integrate
 import os
 
 for j in range(1, len(sys.argv)):
@@ -16,10 +19,10 @@ for j in range(1, len(sys.argv)):
     N           = parameter(5).replace("n", "-").split("-")
     N           = [N[0], int(N[1]), int(N[2])]
     renji       = float(parameter(6).replace("range.csv", "" ))
-
-    #frequency = 25
-    #N         = [0, 15, 1]
-    #renji     = 50
+    
+    #frequency   = 1000
+    #N           = [0, 3, 1]
+    #renji       = 1.2
 
     T           = 1 / (frequency * 10**3) * 10**6 # 周期(μs）
     point_all   = len(data) # 列数
@@ -35,9 +38,10 @@ for j in range(1, len(sys.argv)):
 
     # 読み込んだデータフレームの加工
     Current_late  = data['Ch1'].shift(-int(DCCT_late)) # Ch1の列をDCCTの遅れ分ずらす
-    begin = int(Current_late.iloc[500:1500].idxmax() - (point / 2)) # 1周期の開始点を探してint型にする
-    Current_point = Current_late.iloc[begin:begin+point] # 1周期の開始点からポイント数行まで取り出す
-    CurrentT      = Current_point - Current_point.mean() # 縦のゼロ合わせ
+    #begin = int(Current_late.iloc[500:1500].idxmax() - (point / 2)) # 1周期の開始点を探してint型にする
+    begin = (np.abs(data['Ch2'].iloc[0:400])).idxmin() # 0～200の絶対値で電圧が0に近い点（絶対ポイント）
+    begin -= int(round(2.3773*np.log(frequency) - 5))
+    CurrentT = Current_late.iloc[begin:begin+point] # 1周期の開始点からポイント数行まで取り出す
     Voltage_point = data['Ch2'].iloc[begin:begin+point]
     VoltageT      = Voltage_point-Voltage_point.mean()
     Time          = (data['Time'].iloc[begin:begin+point])*10**6 #1周期の絶対時間(μs)
@@ -45,74 +49,63 @@ for j in range(1, len(sys.argv)):
     t          = np.arange(0, dt * point, dt)
 
     # --------- フーリエ級数展開 ---------
-    def tenkai_cos(x, t, n):  # 関数の定義
-        cos    = np.cos(2 * np.pi * n * t / T)
-        x_cos  = x * cos
-        an     = (2 / T) * x_cos.sum() * dt
-        an_cos = an * cos
-        return (an_cos)
-
-    def tenkai_sin(x, t, n):
-        sin    = np.sin(2 * np.pi * n * t / T)
-        x_sin  = x * sin
-        bn     = (2 / T) * x_sin.sum() * dt
-        bn_sin = bn * sin
-        return (bn_sin)
-
     i_m = i_hf = v = 0
     fourier = 161 #int(input("フーリエ級数展開の回数："))
-    for n in range(1, fourier + 1):
-        i_m  += tenkai_cos(CurrentT, TimeT, n)
-        i_hf += tenkai_sin(CurrentT, TimeT, n)
-        v    += tenkai_cos(VoltageT, TimeT, n)\
-                + tenkai_sin(VoltageT, TimeT, n)
-    i = i_m + i_hf
-
-    # --------- BHループ計算の準備 ---------
-    v_0           = (np.abs(v.iloc[0:200])).idxmin() # 0～200の絶対値で電圧が0に近い点（絶対ポイント）
-    v_dt          = v.iloc[v_0-begin:1000] * dt #（相対ポイント）
-    int_v_dt      = np.cumsum(v_dt) # 累積和をとる=∫vdt
-    v_half        = (np.abs(int_v_dt.iloc[0:1000] - int_v_dt/2)).idxmin() #0～1000で電圧がint_v_dt/2に近い点
-    v_BH          = v.iloc[v_half-begin: ].append(v.iloc[ :v_half-begin]) # BHループ用v, v_half以前と以後の並び替え
-    i_BH          = i.iloc[v_half-begin: ].append(i.iloc[ :v_half-begin]) # BHループ用i
-
-    # BHループ計算
-    int_v_BH_dt   = np.cumsum(v_BH * dt * 10**-6) # 累積和をとる
-    H             = i_BH * N[1] / jirotyo # Hl=Ni
-    B             = int_v_BH_dt / (N[2] * jiromenseki) #NBA=∫vdt
-    B_fix         = B-(B.max() + B.min())/2
     
-    #print("周波数 %f kHz" % frequency)
-    #print("巻数   %d：%d" % (N[1], N[2]))
-    #print("レンジ %f"     % renji)
-    #print("Bm                                                                     %f"     % B_fix.max())
+    def fcos(t, n):
+        return np.cos(2 * np.pi * n * t / T)
+    def fsin(t, n):
+        return np.sin(2 * np.pi * n * t / T)
+    
+    for n in range(1, fourier + 1):
+        i_cos = CurrentT * fcos(TimeT, n)
+        an    = integrate.simps((2 / T)  * i_cos, TimeT)
+        i_m  += an       * fcos(t    , n)
+        
+        i_sin = CurrentT * fsin(TimeT, n)
+        bn    = integrate.simps((2 / T)  * i_sin, TimeT)
+        i_hf += bn      * fsin(t    , n)
+        
+        v_cos = VoltageT * fcos(TimeT, n)
+        an_V  = integrate.simps((2 / T)  * v_cos, TimeT)
+        v_sin = VoltageT * fsin(TimeT, n)
+        bn_V  = integrate.simps((2 / T)  * v_sin, TimeT)
+        v    += an_V     * fcos(t    , n) +\
+                bn_V     * fsin(t    , n)
+    i = i_m + i_hf
+    
+    # --------- BHループ計算の準備 ---------
+    H             = i * N[1] / jirotyo # Hl=Ni
+    H             = H[:-1] # 配列数をint_v_dtと合わせる
+    int_v_dt      = integrate.cumtrapz(v, t) * 10**-6 #∫vdt
+    B             = int_v_dt / (N[2] * jiromenseki) #NBA=∫vdt
+    B_fix         = B-(B.max() + B.min())/2
+
+    print("Bm                                                                     %f"     % B_fix.max())
     #a, b = np.polyfit(TimeT.iloc[begin:v_half], B_fix.iloc[begin:v_half], 1) # 線形回帰
     #print("dB/dt  %f"     % a)
     # print("理想：%s | 実際：%f mT/μs" % (parameter(3), round(a*1000, 3)))
     #print("%s | turns %d：%d" % (parameter(3), N[1], N[2]))
+    print(integrate.simps(H, B))
 
     # --------- 描写 -----------
-    fig = plt.figure(figsize=(10,8)) # グラフを表示する(5,4), (24,4)
+    fig = plt.figure(figsize=(5,4)) # グラフを表示する(5,4), (24,4)
     fig.suptitle("dB/dt=%s | Bm=%f T | turns%d:%d" % (parameter(3), B_fix.max(), N[1], N[2]))
 
     ax1 = fig.add_subplot(2, 2, 1) # 2行2列分割レイアウトの順序1にaxes追加
     ax2 = ax1.twinx()  # ax2をax1に関連付ける
-    ax1.plot(TimeT, i, marker="None", label="Current", color='b', linewidth = 0.5)
-    ax2.plot(TimeT, v, marker="None", label="Voltage", color='r', linewidth = 0.5)
-    #ax1.plot(data['Time'], data['Ch1'], marker="None", label="Current", color='b')
-    #ax2.plot(data['Time'], data['Ch2'], marker="None", label="Voltage", color='r')
+    ax1.plot(t, i, marker="None", label="Current", color='b', linewidth = 0.5)
+    ax2.plot(t, v, marker="None", label="Voltage", color='r', linewidth = 0.5)
     ax1.legend(bbox_to_anchor=(0.1, 1.15), loc='upper left')
     ax2.legend(bbox_to_anchor=(0.5, 1.15), loc='upper left')
     ax1.grid(True)
     ax1.locator_params(axis='x', nbins=5)
-    # ax1.xaxis.set_major_formatter(ScalarFormatter(useMathText=True)) # 目盛りを指数表示にする
-    # ax1.ticklabel_format(style="sci", axis="x", scilimits=(0, 0)) # 目盛りを指数表示にする
     ax1.set_ylabel("Current [A]")
-    ax1.set_xlabel("Time [s]")
+    ax1.set_xlabel("Time [$\mu$s]")
     ax2.set_ylabel("Voltage [V]")
 
     # BHループ
-    ax3 = fig.add_subplot(2, 2, 3) # 2行2列分割レイアウトの順序2にaxes追加
+    ax3 = fig.add_subplot(2, 2, 2) # 2行2列分割レイアウトの順序2にaxes追加
     ax3.plot(H, B_fix, marker="None", linewidth = 0.5)
     # ax3.set_xlim([-60,60])
     # ax3.set_ylim([-0.5,0.5])
@@ -122,9 +115,9 @@ for j in range(1, len(sys.argv)):
     ax3.set_xlabel("H(Magnetic field intensity) [A/m]")
 
     # iの成分
-    ax4 = fig.add_subplot(2, 2, 2)
-    ax4.plot(TimeT, i_m, marker="None", label="$i_m$", color='b', linewidth = 0.5)
-    ax4.plot(TimeT, i_hf, marker="None", label="$i_h+i_f$", color='skyblue', linewidth = 0.5)
+    ax4 = fig.add_subplot(2, 2, 3)
+    ax4.plot(t, i_m, marker="None", label="$i_m$", color='b', linewidth = 0.5)
+    ax4.plot(t, i_hf, marker="None", label="$i_h+i_f$", color='skyblue', linewidth = 0.5)
     ax4.set_ylabel("Current [A]")
     ax4.set_xlabel("Time [$\mu$s]")
     ax4.grid(True)
