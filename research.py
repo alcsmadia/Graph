@@ -31,7 +31,7 @@ for j in range(1, len(sys.argv)):
     point       = int(round(point_float)) # 丸めてからint型に
 
     DCCT_late_time = 6*10**(-3) # μs
-    DCCT_late = round(point * DCCT_late_time / T)
+    DCCT_late = round(point / T * DCCT_late_time)
 
     jirotyo = 0.031852683 # エクセルでは外径と内径から計算している
     jiromenseki = 0.00001207
@@ -90,7 +90,7 @@ for j in range(1, len(sys.argv)):
 
     # --------- 描写 -----------
     fig = plt.figure(figsize=(5,4)) # グラフを表示する(5,4), (24,4)
-    fig.suptitle("dB/dt=%s | Bm=%f T | turns%d:%d" % (parameter(3), B_fix.max(), N[1], N[2]))
+    fig.suptitle("dB/dt={0} | Bm={1:.3g} mT | {2} | turns{3}:{4}".format(parameter(3), B_fix.max()*1000, parameter(2) ,N[1], N[2]))
 
     ax1 = fig.add_subplot(2, 2, 1) # 2行2列分割レイアウトの順序1にaxes追加
     ax2 = ax1.twinx()  # ax2をax1に関連付ける
@@ -131,6 +131,6 @@ for j in range(1, len(sys.argv)):
 
     # 共通
     plt.subplots_adjust(hspace=0.2, wspace=0.5)
-    #plt.savefig("figure_%5fkHz.png" % frequency)
+    #plt.savefig("figure_{1:.5g}kHz.png".format(frequency))
 
 plt.show()
