@@ -1,5 +1,4 @@
 import sys #ドラッグドロップ
-import pandas as pd # csvを開く
 #import matplotlib
 #matplotlib.use('Agg') # -----(1)
 import matplotlib.pyplot as plt # プロット
@@ -8,9 +7,9 @@ from scipy import integrate
 import os
 
 for j in range(1, len(sys.argv)):
-    # --------- ファイルをpandasで読む ---------
-    data = pd.read_csv(sys.argv[j], engine='python', header=1)
-    data.columns=["Time", "Ch1", "Ch2"] # 読み込んだファイルに列名をつける
+    # --------- ファイルを読む ---------
+    data = np.genfromtxt(sys.argv[j], delimiter=",", skip_header=2, dtype='float',
+                         names=["Time", "Ch1", "Ch2"])
 
     # ----------------- 定数 -------------------
     def parameter(x): # ファイル名から変数を読む関数
@@ -31,15 +30,15 @@ for j in range(1, len(sys.argv)):
 
     jirotyo, jiromenseki = 0.031852683, 0.00001207 # エクセルでは外径と内径から計算している
 
-    # 読み込んだデータフレームの加工
-    Current_late  = data['Ch1'].shift(-int(DCCT_late)) # Ch1の列をDCCTの遅れ分ずらす
-    center        = Current_late[::-1].idxmax() + round(0.001*T/dt) # 後ろから最大値を探して少し調整
-    begin         = int(center - (point / 2)) # 1周期の開始点
-    CurrentT      = Current_late.iloc[begin:begin+point] # 1周期の開始点からポイント数行まで取り出す
-    Voltage_point = data['Ch2'].iloc[begin:begin+point]
+    # --------- 読み込んだデータフレームの加工 ---------
+    Current_late  = data['Ch1'][int(DCCT_late):] # Ch1の列をDCCTの遅れ分ずらす
+    center        = np.nanargmax(Current_late) + round(0.001*T/dt) # 最大値を探して少し調整
+    begin         = int(center - (point / 2)) # 1周期の開始点 np.nanargmin(np.abs(data['Ch2'][0:400]))
+    CurrentT      = Current_late[begin:begin+point] # 1周期の開始点からポイント数行まで取り出す
+    Voltage_point = data['Ch2'][begin:begin+point]
     VoltageT      = Voltage_point-Voltage_point.mean()
-    Time          = (data['Time'].iloc[begin:begin+point])*10**6 #1周期の絶対時間(μs)
-    TimeT         = Time - Time.iloc[0] #1周期の相対時間
+    Time          = data['Time'][begin:begin+point] * 10**6 #1周期の絶対時間(μs)
+    TimeT         = Time - Time[0] #1周期の相対時間
     t = np.arange(0, dt * point, dt)
 
     # --------- フーリエ級数展開 ---------
@@ -68,8 +67,10 @@ for j in range(1, len(sys.argv)):
     
     # --------- BHループ計算の準備 ---------
     H             = i * N[1] / jirotyo # Hl=Ni
-    H             = H[:-1] # 配列数をint_v_dtと合わせる
-    B             = integrate.cumtrapz(v, t) / (N[2] * jiromenseki) * 10**-6 #NBA=∫vdt
+    #H             = H[:-1] # 配列数をint_v_dtと合わせる
+    int_v_dt      = integrate.cumtrapz(v, t)
+    int_v_dt      = np.append(int_v_dt, (v[-1]+v[0])*dt/2)
+    B             = int_v_dt / (N[2] * jiromenseki) * 10**-6 #NBA=∫vdt
     B_fix         = B-(B.max() + B.min())/2
 
     # --------- 描写 -----------
