@@ -1,9 +1,6 @@
 import sys #ドラッグドロップ
-#import matplotlib
-#matplotlib.use('Agg') # -----(1)
 import matplotlib.pyplot as plt # プロット
 import numpy as np # 数学ライブラリ
-from scipy import integrate
 import os
 
 for j in range(1, len(sys.argv)):
@@ -29,11 +26,12 @@ for j in range(1, len(sys.argv)):
     DCCT_late = round(point / T * DCCT_late_time)
 
     jirotyo, jiromenseki = 0.031852683, 0.00001207 # エクセルでは外径と内径から計算している
+    #jirotyo, jiromenseki = 0.0635, 0.0000654
 
     # --------- 読み込んだデータフレームの加工 ---------
     Current_late  = data['Ch1'][int(DCCT_late):] # Ch1の列をDCCTの遅れ分ずらす
-    center        = np.nanargmax(Current_late) + round(0.001*T/dt) # 最大値を探して少し調整
-    begin         = int(center - (point / 2)) # 1周期の開始点 np.nanargmin(np.abs(data['Ch2'][0:400]))
+    #center        = len(Current_late)-np.nanargmax(Current_late[::-1]) -1 # 最大値を探して少し調整
+    begin         = np.nanargmin(np.abs(data['Ch2'][0:int(point_all/4)])) # 1周期の開始点 int(center - (point / 2))
     CurrentT      = Current_late[begin:begin+point] # 1周期の開始点からポイント数行まで取り出す
     Voltage_point = data['Ch2'][begin:begin+point]
     VoltageT      = Voltage_point-Voltage_point.mean()
@@ -49,16 +47,17 @@ for j in range(1, len(sys.argv)):
             return np.cos(n * 2 * np.pi / T * t) # cos(n * ωt)
         def fsin(t, n):
             return np.sin(n * 2 * np.pi / T * t)
-
+        
         i_m = i_hf = 0
         for n in range(1, fourier + 1):
             i_cos = i_data * fcos(t_data, n)
-            an    = integrate.cumtrapz((2 / T)  * i_cos, t_data)[point-2]
+            an    = (2 / T) * i_cos.sum() * dt
             i_m  += an       * fcos(t    , n)
             
             i_sin = i_data * fsin(t_data, n)
-            bn    = integrate.cumtrapz((2 / T)  * i_sin, t_data)[point-2]
+            bn    = (2 / T) * i_sin.sum() * dt
             i_hf += bn      * fsin(t    , n)
+            
         return [i_m, i_hf]
     
     i_m, i_hf = fourier(CurrentT, TimeT)[0], fourier(CurrentT, TimeT)[1]
@@ -67,48 +66,44 @@ for j in range(1, len(sys.argv)):
     
     # --------- BHループ計算の準備 ---------
     H             = i * N[1] / jirotyo # Hl=Ni
-    #H             = H[:-1] # 配列数をint_v_dtと合わせる
-    int_v_dt      = integrate.cumtrapz(v, t)
-    int_v_dt      = np.append(int_v_dt, (v[-1]+v[0])*dt/2)
+    int_v_dt      = np.cumsum(v * dt)
     B             = int_v_dt / (N[2] * jiromenseki) * 10**-6 #NBA=∫vdt
     B_fix         = B-(B.max() + B.min())/2
 
     # --------- 描写 -----------
-    fig = plt.figure(figsize=(7.5,6)) # グラフを表示する(5,4), (24,4)
+    fig = plt.figure(figsize=(10,8)) # グラフを表示する(5,4), (24,4)
     fig.suptitle("dB/dt={0} | Bm={1:.3g} mT | {2} | turns{3}:{4}".format(parameter(3), B_fix.max()*1000, parameter(2) ,N[1], N[2]))
+    fig.subplots_adjust(hspace=0.3, wspace=0.5)
 
     ax1 = fig.add_subplot(2, 2, 1) # 2行2列分割レイアウトの順序1にaxes追加
     ax2 = ax1.twinx()  # ax2をax1に関連付ける
+    ax1.set_title("↓フーリエ級数展開後↓", fontdict={'family': 'IPAexGothic'})
     ax1.plot(t, i, marker="None", label="Current", color='b', linewidth = 0.5)
+    #ax1.plot(TimeT[center-begin], CurrentT[center-begin], marker="o")
     ax2.plot(t, v, marker="None", label="Voltage", color='r', linewidth = 0.5)
     #ax1.legend(bbox_to_anchor=(0.1, 1.15), loc='upper left')
     #ax2.legend(bbox_to_anchor=(0.5, 1.15), loc='upper left')
-    ax1.grid(True)
-    ax1.locator_params(axis='x', nbins=5)
-    ax1.set_ylabel("Current [A]")
+    ax1.grid(True), ax1.locator_params(axis='x', nbins=5)
     ax1.set_xlabel("Time [$\mu$s]")
-    ax2.set_ylabel("Voltage [V]")
+    ax1.set_ylabel("Current [A]"), ax2.set_ylabel("Voltage [V]")
 
     # BHループ
     ax3 = fig.add_subplot(2, 2, 2) # 2行2列分割レイアウトの順序2にaxes追加
     ax3.plot(H, B_fix, marker="None", linewidth = 0.5)
-    ax3.grid(True)
-    ax3.locator_params(axis='x', nbins=5)
-    ax3.set_ylabel("B(Magnetic flux density) [T]")
+    ax3.grid(True), ax3.locator_params(axis='x', nbins=5)
     ax3.set_xlabel("H(Magnetic field intensity) [A/m]")
+    ax3.set_ylabel("B(Magnetic flux density) [T]")
 
     # iの成分
     ax4 = fig.add_subplot(2, 2, 3)
     ax4.plot(t, i_m, marker="None", label="$i_m$", color='b', linewidth = 0.5)
     ax4.plot(t, i_hf, marker="None", label="$i_h+i_f$", color='skyblue', linewidth = 0.5)
-    ax4.set_ylabel("Current [A]")
     ax4.set_xlabel("Time [$\mu$s]")
-    ax4.grid(True)
-    ax4.locator_params(axis='x', nbins=5)
+    ax4.set_ylabel("Current [A]")
+    ax4.grid(True), ax4.locator_params(axis='x', nbins=5)
     ax4.legend()
-
+    
     # 共通
-    plt.subplots_adjust(hspace=0.3, wspace=0.5)
-    #plt.savefig("figure_{0:.4g}kHz.png".format(frequency))
+    #fig.savefig("figure_{0:.4g}kHz.png".format(frequency))
 
 plt.show()
