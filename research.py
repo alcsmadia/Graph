@@ -71,38 +71,53 @@ for j in range(1, len(sys.argv)):
     B_fix         = B-(B.max() + B.min())/2
 
     # --------- 描写 -----------
-    fig = plt.figure(figsize=(10,8)) # グラフを表示する(5,4), (24,4)
-    fig.suptitle("dB/dt={0} | Bm={1:.3g} mT | {2} | turns{3}:{4}".format(parameter(3), B_fix.max()*1000, parameter(2) ,N[1], N[2]))
-    fig.subplots_adjust(hspace=0.3, wspace=0.5)
-
+    if j % 2 == 1:
+        fig = plt.figure(figsize=(10,8)) # グラフを表示する(5,4), (24,4)
+        fig.suptitle("dB/dt=%s | Bm=%f T | turns%d:%d" % (parameter(3), B_fix.max(), N[1], N[2]))
+    lim = 0.0117 * frequency
     ax1 = fig.add_subplot(2, 2, 1) # 2行2列分割レイアウトの順序1にaxes追加
     ax2 = ax1.twinx()  # ax2をax1に関連付ける
-    ax1.plot(t, i, marker="None", label="Current", color='b', linewidth = 0.5)
-    #ax1.plot(TimeT[center-begin], CurrentT[center-begin], marker="o")
-    ax2.plot(t, v, marker="None", label="Voltage", color='r', linewidth = 0.5)
-    #ax1.legend(bbox_to_anchor=(0.1, 1.15), loc='upper left')
-    #ax2.legend(bbox_to_anchor=(0.5, 1.15), loc='upper left')
-    ax1.grid(True), ax1.locator_params(axis='x', nbins=5)
+    if j % 2 == 1:
+        ax1.plot(t, i, marker="None", label="Current", color='r', linewidth = 0.5)
+        ax2.plot(t, v, marker="None", label="Voltage", color='lightcoral', linewidth = 0.5)
+        #ax1.plot(data['Time'], data['Ch1'], marker="None", label="Current", color='b')
+        #ax2.plot(data['Time'], data['Ch2'], marker="None", label="Voltage", color='r')
+        #ax1.legend(bbox_to_anchor=(0.1, 1.15), loc='upper left')
+        #ax2.legend(bbox_to_anchor=(0.5, 1.15), loc='upper left')
+    else :
+        ax1.plot(t, i, marker="None", label="Current", color='b', linewidth = 0.5)
+        ax2.plot(t, v, marker="None", label="Voltage", color='skyblue', linewidth = 0.5)
+    ax1.grid(True)
+    ax1.locator_params(axis='x', nbins=5)
+    ax1.set_ylabel("Current [A]")
     ax1.set_xlabel("Time [$\mu$s]")
-    ax1.set_ylabel("Current [A]"), ax2.set_ylabel("Voltage [V]")
+    ax2.set_ylabel("Voltage [V]"),    ax2.set_ylim([-1 * lim, lim])
 
     # BHループ
     ax3 = fig.add_subplot(2, 2, 2) # 2行2列分割レイアウトの順序2にaxes追加
-    ax3.plot(H, B_fix, marker="None", linewidth = 0.5)
+    if j % 2 == 1:
+        ax3.plot(H, B_fix, marker="None", color='r', linewidth = 0.5)
+    else:
+        ax3.plot(H, B_fix, marker="None", color='b', linewidth = 0.5)
     ax3.grid(True), ax3.locator_params(axis='x', nbins=5)
     ax3.set_xlabel("H(Magnetic field intensity) [A/m]")
     ax3.set_ylabel("B(Magnetic flux density) [T]")
 
     # iの成分
     ax4 = fig.add_subplot(2, 2, 3)
-    ax4.plot(t, i_m, marker="None", label="$i_m$", color='b', linewidth = 0.5)
-    ax4.plot(t, i_hf, marker="None", label="$i_h+i_f$", color='skyblue', linewidth = 0.5)
-    ax4.set_xlabel("Time [$\mu$s]")
-    ax4.set_ylabel("Current [A]")
-    ax4.grid(True), ax4.locator_params(axis='x', nbins=5)
-    ax4.legend()
+    if j % 2 == 1:
+        ax4.plot(t, i_m, marker="None", label="$i_m$", color='r', linewidth = 0.5)
+        ax4.plot(t, i_hf, marker="None", label="$i_h+i_f$", color='lightcoral', linewidth = 0.5)
+        ax4.set_ylabel("Current [A]")
+        ax4.set_xlabel("Time [$\mu$s]")
+    else :
+        ax4.plot(t, i_m, marker="None", label="$i_m$", color='b', linewidth = 0.5)
+        ax4.plot(t, i_hf, marker="None", label="$i_h+i_f$", color='skyblue', linewidth = 0.5)
+    ax4.grid(True)
+    ax4.locator_params(axis='x', nbins=5),    ax4.legend()
     
     # 共通
-    #fig.savefig("figure_{0:.4g}kHz.png".format(frequency))
-
+    plt.subplots_adjust(hspace=0.2, wspace=0.5)
+    if j % 2 == 0:
+        plt.savefig(parameter(0) + ".png")
 plt.show()
