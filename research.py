@@ -80,10 +80,6 @@ for j in range(1, len(sys.argv)):
     if j % 2 == 1:
         ax1.plot(t, i, marker="None", label="Current", color='r', linewidth = 0.5)
         ax2.plot(t, v, marker="None", label="Voltage", color='lightcoral', linewidth = 0.5)
-        #ax1.plot(data['Time'], data['Ch1'], marker="None", label="Current", color='b')
-        #ax2.plot(data['Time'], data['Ch2'], marker="None", label="Voltage", color='r')
-        #ax1.legend(bbox_to_anchor=(0.1, 1.15), loc='upper left')
-        #ax2.legend(bbox_to_anchor=(0.5, 1.15), loc='upper left')
     else :
         ax1.plot(t, i, marker="None", label="Current", color='b', linewidth = 0.5)
         ax2.plot(t, v, marker="None", label="Voltage", color='skyblue', linewidth = 0.5)
@@ -96,9 +92,11 @@ for j in range(1, len(sys.argv)):
     # BHループ
     ax3 = fig.add_subplot(2, 2, 2) # 2行2列分割レイアウトの順序2にaxes追加
     if j % 2 == 1:
-        ax3.plot(H, B_fix, marker="None", color='r', linewidth = 0.5)
+        ax3.plot(H, B_fix, marker="None", label="$40^\circ\mathrm{C}$", color='r', linewidth = 0.5)
+        ax3.legend(bbox_to_anchor=(0.65, 0.3), loc='upper left')
     else:
-        ax3.plot(H, B_fix, marker="None", color='b', linewidth = 0.5)
+        ax3.plot(H, B_fix, marker="None", label="$60^\circ\mathrm{C}$", color='b', linewidth = 0.5)
+        ax3.legend(bbox_to_anchor=(0.65, 0.3), loc='upper left')
     ax3.grid(True), ax3.locator_params(axis='x', nbins=5)
     ax3.set_xlabel("H(Magnetic field intensity) [A/m]")
     ax3.set_ylabel("B(Magnetic flux density) [T]")
@@ -119,5 +117,5 @@ for j in range(1, len(sys.argv)):
     # 共通
     plt.subplots_adjust(hspace=0.2, wspace=0.5)
     if j % 2 == 0:
-        plt.savefig(parameter(0) + ".png")
-plt.show()
+        #plt.savefig(parameter(1) + ".png")
+        plt.show()
