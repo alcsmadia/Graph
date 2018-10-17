@@ -76,6 +76,7 @@ for j in range(1, len(sys.argv)):
         fig.suptitle("dB/dt=%s | Bm=%f T | turns%d:%d" % (parameter(3), B_fix.max(), N[1], N[2]))
     lim = 0.0117 * frequency
     ax1 = fig.add_subplot(2, 2, 1) # 2行2列分割レイアウトの順序1にaxes追加
+    ax1.set_title("$\downarrow$After Fourier series expansion$\downarrow$")
     ax2 = ax1.twinx()  # ax2をax1に関連付ける
     if j % 2 == 1:
         ax1.plot(t, i, marker="None", label="Current", color='r', linewidth = 0.5)
@@ -117,5 +118,5 @@ for j in range(1, len(sys.argv)):
     # 共通
     plt.subplots_adjust(hspace=0.2, wspace=0.5)
     if j % 2 == 0:
-        #plt.savefig(parameter(1) + ".png")
-        plt.show()
+        plt.savefig(parameter(1) + ".png")
+        #plt.show()
