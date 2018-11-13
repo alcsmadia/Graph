@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt # プロット
 import numpy as np # 数学ライブラリ
 import os
 
-X = Y = Zm = Zf = np.empty(0)
+X = Y = Hm_t = Hh_t = Hf_t = np.empty(0)
 for j in range(1, len(sys.argv)):
     # --------- ファイルを読む ---------
     data = np.genfromtxt(sys.argv[j], delimiter=",", skip_header=2, dtype='float',
@@ -38,8 +38,8 @@ for j in range(1, len(sys.argv)):
     Time          = data['Time'][begin:begin+point] * 10**6 #1周期の絶対時間(μs)
     TimeT         = Time - Time[0] #1周期の相対時間
     dt2            = dt * point / 1600 # 1/4周期で平均をとるためにポイント数を4の倍数にする
-    t = np.arange(0, dt * point, dt2) # 1/4周期で平均をとるためにポイント数を4の倍数にする
-    amari = len(t) % 4
+    t             = np.arange(0, dt * point, dt2)
+    amari = len(t) - 1600
     t = t[:len(t)-amari] # なんか1600点にならないときがあるので
 
     # --------- フーリエ級数展開 ---------
@@ -100,84 +100,86 @@ for j in range(1, len(sys.argv)):
         + np.concatenate((ihf4[::-1], -1 * ihf1[::-1], ihf2[::-1], -1 * ihf3[::-1]))\
            )/4
     
-    # -------------------- おわり ---------
     i             = i_m + i_hf
     H             = i * N[1] / jirotyo # Hl=Ni
     Hm            = i_m * N[1] / jirotyo
     if j == 1:
         Hh        = i_hf * N[1] / jirotyo
     Hf            = i_hf * N[1] / jirotyo - Hh
-    """
-    # --------- 描写 -----------
-    fig = plt.figure(figsize=(10,8)) # グラフを表示する(5,4), (24,4)
-    fig.suptitle("dB/dt={0} | Bm={1:.3g} mT | {2} | turns{3}:{4}".format(parameter(3), B_fix.max()*1000, parameter(2) ,N[1], N[2]))
-    fig.subplots_adjust(hspace=0.3, wspace=0.5)
     
-    ax1 = fig.add_subplot(2, 2, 1) # 2行2列分割レイアウトの順序1にaxes追加
-    ax2 = ax1.twinx()  # ax2をax1に関連付ける
-    ax1.set_title("↓フーリエ級数展開後↓", fontdict={'family': 'IPAexGothic'})
-    ax1.plot(t, i, marker="None", label="Current", color='b', linewidth = 0.5)
-    #ax1.plot(TimeT[center-begin], CurrentT[center-begin], marker="o")
-    ax2.plot(t, v, marker="None", label="Voltage", color='r', linewidth = 0.5)
-    #ax1.legend(bbox_to_anchor=(0.1, 1.15), loc='upper left')
-    #ax2.legend(bbox_to_anchor=(0.5, 1.15), loc='upper left')
-    ax1.grid(True), ax1.locator_params(axis='x', nbins=5)
-    ax1.set_xlabel("Time [$\mu$s]")
-    ax1.set_ylabel("Current [A]"), ax2.set_ylabel("Voltage [V]")
-    
-    Hf1, Hf2, Hf3, Hf4 = np.split(Hf, 4)
-    B_fix1, B_fix2, B_fix3, B_fix4 = np.split(B_fix, 4)
-    # BHループ
-    ax3 = fig.add_subplot(2, 2, 2) # 2行2列分割レイアウトの順序2にaxes追加
-    ax3.plot(H, B_fix, marker="None", linewidth = 0.5, label="$H$")
-    ax3.plot(Hm, B_fix, marker="None", linewidth = 0.5, label="$H_m$")
-    ax3.plot(Hh, B_fix, marker="None", linewidth = 0.5, color='#d62728', label="$H_h$")
-    if j != 1:
-        ax3.plot(Hf, B_fix, marker="None", linewidth = 0.5, label="$H_f$")
-    ax3.grid(True), ax3.locator_params(axis='x', nbins=5)
-    ax3.set_xlabel("H(Magnetic field intensity) [A/m]")
-    ax3.set_ylabel("B(Magnetic flux density) [T]")
-    ax3.legend()
-    
-    # iの成分
-    ax4 = fig.add_subplot(2, 2, 3)
-    ax4.plot(t, i_m, marker="None", label="$i_m$", color='b', linewidth = 0.5)
-    ax4.plot(t, i_hf, marker="None", label="$i_h+i_f$", color='skyblue', linewidth = 0.5)
-    ax4.set_xlabel("Time [$\mu$s]")
-    ax4.set_ylabel("Current [A]")
-    ax4.grid(True), ax4.locator_params(axis='x', nbins=5)
-    ax4.legend()
-    
-    # 共通
-    #fig.savefig("figure_{0:.4g}kHz.png".format(frequency))
-
-    plt.show()
-    """
-    B_fix = B_fix * 1000 # mTにする
-    B_pre = np.concatenate((B_fix[1:] , B_fix[:1]))
+    # --------------- テーブル作成 ----------------
+    B_pre = np.concatenate((B_fix[1:] , B_fix[:1])) # Bを1ポイントずらす
     dbdt  = (B_pre - B_fix) / dt2
     
+    H1, H2, H3, H4 = np.split(H, 4)
     Hm1, Hm2, Hm3, Hm4 = np.split(Hm, 4)
+    Hh1, Hh2, Hh3, Hh4 = np.split(Hh, 4)
     Hf1, Hf2, Hf3, Hf4 = np.split(Hf, 4)
     B_fix1, B_fix2, B_fix3, B_fix4 = np.split(B_fix, 4)
     dbdt1, dbdt2, dbdt3, dbdt4 = np.split(dbdt, 4)
     dbdt = np.concatenate((dbdt4, dbdt1))
     
-    X = np.append(X, dbdt)
+    X = np.append(X, dbdt) # X = np.append(X, np.full(800, dbdt)
     Y = np.append(Y, np.concatenate((B_fix4, B_fix1)))
-    Zm = np.append(Zm, np.concatenate((Hm4, Hm1)))
+    Hm_t = np.append(Hm_t, np.concatenate((Hm4, Hm1)))
+    Hh_t = np.append(Hh_t, np.concatenate((Hh4, Hh1)))
     if j != 1:
-        Zf = np.append(Zf, dbdt*1000 / np.concatenate((Hf4, Hf1)))
+        Hf_t  = np.append(Hf_t, np.concatenate((Hf4, Hf1)))
 
-CSVm = np.vstack((X      , Y      , Zm)).transpose()
-CSVf = np.vstack((X[800:], Y[800:], Zf)).transpose()
+lam_f = X[800:] / Hf_t
+Hf_t  = np.concatenate((np.empty(800), Hf_t))
 
 def save(name, csv):
     np.savetxt("table_{0}.csv".format(name), csv, delimiter=',', \
     fmt    = ["%.4f", "%.4f", "%.4f"], \
     header = "FormatType,102,\nmemo1,,\nmemo2,,", \
-    footer = "[ScaleX]\nLabel=dB/dt\n[ScaleY]\nLabel=B\n[ScaleZ]\nLabel={0}".format(name), \
+    footer = "[GraphContour]\nSurfaceType=0\n[GraphPoint]\nPointType=2\n\
+              [ScaleX]\nLabel=dB/dt\n[ScaleY]\nLabel=B\n[ScaleZ]\nLabel={0}".format(name), \
     comments="")
     
+CSVm  = np.vstack((X*1000      , Y*1000      , Hm_t)).transpose()
+CSVf  = np.vstack((X[800:]*1000, Y[800:]*1000, lam_f)).transpose()
+
 save("Hm" , CSVm)
 save("λf", CSVf)
+
+    # --------------- 再現 ----------------
+test = np.genfromtxt("C:\\Users\\Hidenori\\Desktop\\data.csv", delimiter=",", dtype='float', names=["x", "y"])
+
+def saigen(Z):
+    x0 = y0 = z0 = np.empty(0)
+    for ii in range(0, len(test)):
+        data_dbdt   = np.array([5, 10, 20, 30, 40, 50, 60, 80, 100, 125, 150,\
+                                175, 200, 300, 400, 500, 600, 700, 800, 900], dtype=object)
+        x           = test['x'][ii] #float(input("dbdt:"))
+        dbdt_close  = (np.abs(data_dbdt - x)).argsort()[:2] # xに近い順にdbdtを2点取りだす
+        dbdt_close  = np.sort(dbdt_close) # 取り出したdbdtを昇順にする
+        
+        y           = test['y'][ii] #float(input("B   :"))
+        # yに近い順にBを2*2点取り出す
+        B_close1    = (np.abs(Y[dbdt_close[0] * 800 : (dbdt_close[0] + 1) * 800] - y)).argsort()[:2] + dbdt_close[0] * 800
+        B_close2    = (np.abs(Y[dbdt_close[1] * 800 : (dbdt_close[1] + 1) * 800] - y)).argsort()[:2] + dbdt_close[1] * 800
+        
+        x1, y1, z1  = data_dbdt[dbdt_close[0]], Y[B_close1[0]], Z[B_close1[0]]
+        x1, y2, z2  = data_dbdt[dbdt_close[0]], Y[B_close1[1]], Z[B_close1[1]]
+        x2, y1, z3  = data_dbdt[dbdt_close[1]], Y[B_close2[0]], Z[B_close2[0]]
+        x2, y2, z4  = data_dbdt[dbdt_close[1]], Y[B_close2[1]], Z[B_close2[1]]
+        
+        if y > (y2-y1)/(x2-x1) * (x-x1) + y1:
+            z = ((x1-x)*((y2-y1)*(z4-z1)-(y2-y1)*(z2-z1))+(y1-y)*((z2-z1)*(x2-x1))) / ((x1-x2)*(y2-y1)) + z1
+        else:
+            z = ((x1-x)*((y2-y1)*(z3-z1))+(y1-y)*((z2-z1)*(x2-x1))) / ((x1-x2)*(y2-y1)) + z1
+        #x0 = np.append(x0, x)
+        #y0 = np.append(y0, y)
+        z0 = np.append(z0, z)
+    return (z0)
+
+X_T = np.concatenate((test['x'], -1 * test['x']))
+Y_T = np.concatenate((test['y'], -1 * test['y']))
+H_T = saigen(Hm_t) + saigen(Hh_t) + saigen(Hf_t)
+H_T = np.concatenate((H_T      , -1 * H_T))
+
+np.savetxt('saigen_Hm.csv', np.vstack((test['x'], test['y'], saigen(Hm_t))).transpose(),  delimiter=',')
+np.savetxt('saigen_Hh.csv', np.vstack((test['x'], test['y'], saigen(Hh_t))).transpose(),  delimiter=',')
+np.savetxt('saigen_Hf.csv', np.vstack((test['x'], test['y'], saigen(Hf_t))).transpose(), delimiter=',')
+np.savetxt('saigen_H.csv' , np.vstack((X_T, Y_T, H_T)).transpose(), delimiter=',')
