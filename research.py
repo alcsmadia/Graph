@@ -2,6 +2,8 @@ import sys #ドラッグドロップ
 import matplotlib.pyplot as plt # プロット
 import numpy as np # 数学ライブラリ
 import os
+from mpl_toolkits.mplot3d import Axes3D
+import subprocess
 
 for j in range(1, len(sys.argv)):
     # --------- ファイルを読む ---------
@@ -11,12 +13,13 @@ for j in range(1, len(sys.argv)):
     # ----------------- 定数 -------------------
     def parameter(x): # ファイル名から変数を読む関数
        return(os.path.basename(sys.argv[j]).split(" ")[x]) # csv名を空白で区切ったx番目
-    frequency   = float(parameter(1).replace("kHz", "" ))
+    frequency   = float(parameter(1).replace("kHz", ""))
+    dbdt        = int(parameter(3).replace("(", "").replace("mTµs)", ""))
     N           = parameter(5).replace("n", "-").split("-")
     N           = [N[0], int(N[1]), int(N[2])]
     renji       = float(parameter(6).replace("range.csv", "" ))
 
-    T           = 1 / (frequency * 10**3) * 10**6 # 周期(μs）
+    T           = 1 / (frequency * 10**3) * 10**6 # 周期(μs
     point_all   = len(data) # 列数
     dt          = renji / point_all
     point_float = T / dt # 1周期ポイント数=全ポイント数/レンジ(個/秒)*周期(秒)
@@ -30,14 +33,14 @@ for j in range(1, len(sys.argv)):
 
     # --------- 読み込んだデータフレームの加工 ---------
     Current_late  = data['Ch1'][int(DCCT_late):] # Ch1の列をDCCTの遅れ分ずらす
-    #center        = len(Current_late)-np.nanargmax(Current_late[::-1]) -1 # 最大値を探して少し調整
-    begin         = np.nanargmin(np.abs(data['Ch2'][0:int(point_all/4)])) # 1周期の開始点 int(center - (point / 2))
+    begin         = np.nanargmin(np.abs(data['Ch2'][0:int(point_all/4)]))
     CurrentT      = Current_late[begin:begin+point] # 1周期の開始点からポイント数行まで取り出す
-    Voltage_point = data['Ch2'][begin:begin+point]
-    VoltageT      = Voltage_point-Voltage_point.mean()
+    VoltageT      = data['Ch2'][begin:begin+point]
     Time          = data['Time'][begin:begin+point] * 10**6 #1周期の絶対時間(μs)
     TimeT         = Time - Time[0] #1周期の相対時間
-    t = np.arange(0, dt * point, dt)
+    t = np.arange(0, dt * point, dt * point / 1600) # 1/4周期で平均をとるためにポイント数を4の倍数にする
+    amari = len(t) % 4
+    t = t[:len(t)-amari]
 
     # --------- フーリエ級数展開 ---------
     def fourier(i_data, t_data):
@@ -60,16 +63,60 @@ for j in range(1, len(sys.argv)):
             
         return [i_m, i_hf]
     
-    i_m, i_hf = fourier(CurrentT, TimeT)[0], fourier(CurrentT, TimeT)[1]
-    i         = i_m + i_hf
+    i_m, i_hf = fourier(CurrentT, TimeT)[0],  fourier(CurrentT, TimeT)[1]
     v         = fourier(VoltageT, TimeT)[0] + fourier(VoltageT, TimeT)[1]
     
     # --------- BHループ計算の準備 ---------
+    i             = i_m + i_hf
     H             = i * N[1] / jirotyo # Hl=Ni
+    Hm            = i_m * N[1] / jirotyo
+    if j == 1:
+        Hh        = i_hf * N[1] / jirotyo
+    Hf            = i_hf * N[1] / jirotyo
     int_v_dt      = np.cumsum(v * dt)
     B             = int_v_dt / (N[2] * jiromenseki) * 10**-6 #NBA=∫vdt
     B_fix         = B-(B.max() + B.min())/2
-
+    
+    B_begin       = int(np.nanargmin(np.abs(B_fix[:800])))
+    B_fix         = np.concatenate((B_fix[B_begin:], B_fix[:B_begin]))
+    H             = np.concatenate((H[B_begin:]    ,  H[:B_begin]))
+    Hm            = np.concatenate((Hm[B_begin:]   , Hm[:B_begin]))
+    if j == 1:
+        Hh        = np.concatenate((Hh[B_begin:]   , Hh[:B_begin]))
+    Hf            = np.concatenate((Hf[B_begin:]   , Hf[:B_begin])) - Hh
+    
+    # --------- T/4で折りたたむ ---------
+    Hm1, Hm2, Hm3, Hm4 = np.split(Hm, 4)
+    Hm  = (Hm\
+           + np.concatenate((Hm2[::-1], -1 * Hm3[::-1], Hm4[::-1], -1 * Hm1[::-1]))\
+           - 1 * np.concatenate((Hm3, Hm4, Hm1, Hm2))\
+           + np.concatenate((-1 * Hm4[::-1], Hm1[::-1], -1 * Hm2[::-1], Hm3[::-1]))\
+           )/4
+    
+    if j == 1:
+        Hh1, Hh2, Hh3, Hh4 = np.split(Hh, 4)
+        Hh = (np.concatenate((Hh1, Hh2, Hh3, Hh4))\
+            - np.concatenate((Hh2[::-1], -1 * Hh3[::-1], Hh4[::-1], -1 * Hh1[::-1]))\
+             - 1 * np.concatenate((Hh3, Hh4, Hh1, Hh2))\
+            + np.concatenate((Hh4[::-1], -1 * Hh1[::-1], Hh2[::-1], -1 * Hh3[::-1]))\
+               )/4
+    
+    Hf1, Hf2, Hf3, Hf4 = np.split(Hf, 4)
+    Hf = (np.concatenate((Hf1, Hf2, Hf3, Hf4))\
+        - np.concatenate((Hf2[::-1], -1 * Hf3[::-1], Hf4[::-1], -1 * Hf1[::-1]))\
+         - 1 * np.concatenate((Hf3, Hf4, Hf1, Hf2))\
+        + np.concatenate((Hf4[::-1], -1 * Hf1[::-1], Hf2[::-1], -1 * Hf3[::-1]))\
+           )/4
+    
+    H  = Hm + Hh + Hf
+    
+    B_fix1, B_fix2, B_fix3, B_fix4 = np.split(B_fix, 4)
+    B_fix    = (B_fix\
+           + np.concatenate((B_fix2[::-1], -1 * B_fix3[::-1], B_fix4[::-1], -1 * B_fix1[::-1]))\
+           - 1 * np.concatenate((B_fix3, B_fix4, B_fix1, B_fix2))\
+           + np.concatenate((-1 * B_fix4[::-1], B_fix1[::-1], -1 * B_fix2[::-1], B_fix3[::-1]))\
+           )/4
+    """
     # --------- 描写 -----------
     fig = plt.figure(figsize=(10,8)) # グラフを表示する(5,4), (24,4)
     fig.suptitle("dB/dt={0} | Bm={1:.3g} mT | {2} | turns{3}:{4}".format(parameter(3), B_fix.max()*1000, parameter(2) ,N[1], N[2]))
@@ -89,10 +136,14 @@ for j in range(1, len(sys.argv)):
 
     # BHループ
     ax3 = fig.add_subplot(2, 2, 2) # 2行2列分割レイアウトの順序2にaxes追加
-    ax3.plot(H, B_fix, marker="None", linewidth = 0.5)
+    ax3.plot(H,  B_fix, marker="None", linewidth = 0.5, label="$H$")
+    ax3.plot(Hm, B_fix, marker="None", linewidth = 0.5, label="$H_m$")
+    ax3.plot(Hh, B_fix, marker="None", linewidth = 0.5, label="$H_h$")
+    ax3.plot(Hf, B_fix, marker="None", linewidth = 0.5, label="$H_f$")
     ax3.grid(True), ax3.locator_params(axis='x', nbins=5)
     ax3.set_xlabel("H(Magnetic field intensity) [A/m]")
     ax3.set_ylabel("B(Magnetic flux density) [T]")
+    ax3.legend()
 
     # iの成分
     ax4 = fig.add_subplot(2, 2, 3)
@@ -104,6 +155,27 @@ for j in range(1, len(sys.argv)):
     ax4.legend()
     
     # 共通
-    #fig.savefig("figure_{0:.4g}kHz.png".format(frequency))
+    fig.savefig("figure_{0:.4g}kHz.png".format(frequency))
 
-plt.show()
+    #plt.show()
+    
+    """
+    if j == 1:
+        X = Y = Z = CSV = np.empty(0)
+    for q in range(0, len(t)):
+        X = np.append(X, dbdt)
+    Y = np.append(Y, B_fix)
+    Z = np.append(Z, Hm) # Hm
+    if j == len(sys.argv)-1:
+        print(len(X))
+        print(len(Y))
+        print(len(Z))
+        CSV = np.vstack((X, Y, Z))
+        CSV = CSV.transpose()
+        np.savetxt('out.csv', CSV, delimiter=',', \
+        fmt    = ["%.4f", "%.4f", "%.4f"], \
+        header = "FormatType,102,\nmemo1,,\nmemo2,,", \
+        footer = "[ScaleX]\nLabel=dB/dt\n[ScaleY]\nLabel=Hm\n[ScaleZ]\nLabel=B", \
+        comments="")
+        subprocess.Popen([r'C:/Users/Hidenori/OneDrive/ドキュメント/プログラミング/PycharmProjects/Research/sub/GraphR242/GraphR.exe', \
+                          r'C:/Users/Hidenori/OneDrive/ドキュメント/プログラミング/PycharmProjects/Research/out.csv'])
