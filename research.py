@@ -131,10 +131,10 @@ Hf_t  = np.concatenate((np.empty(800), Hf_t))
 
 def save(name, csv):
     np.savetxt("table_{0}.csv".format(name), csv, delimiter=',', \
-    fmt    = ["%.4f", "%.4f", "%.4f"], \
+    fmt    = "%.6f", \
     header = "FormatType,102,\nmemo1,,\nmemo2,,", \
     footer = "[GraphContour]\nSurfaceType=0\n[GraphPoint]\nPointType=2\n\
-              [ScaleX]\nLabel=dB/dt\n[ScaleY]\nLabel=B\n[ScaleZ]\nLabel={0}".format(name), \
+              [ScaleX]\nLabel=dBdt\n[ScaleY]\nLabel=B\n[ScaleZ]\nLabel={0}".format(name), \
     comments="")
     
 CSVm  = np.vstack((X*1000      , Y*1000      , Hm_t)).transpose()
@@ -144,13 +144,14 @@ save("Hm" , CSVm)
 save("λf", CSVf)
 
     # --------------- 再現 ----------------
-test = np.genfromtxt("C:\\Users\\Hidenori\\Desktop\\data.csv", delimiter=",", dtype='float', names=["x", "y"])
+test = np.genfromtxt("C:\\Users\\Hidenori\\Desktop\\data2.csv", delimiter=",", dtype='float', names=["x", "y"])
 
 def saigen(Z):
     x0 = y0 = z0 = np.empty(0)
     for ii in range(0, len(test)):
         data_dbdt   = np.array([5, 10, 20, 30, 40, 50, 60, 80, 100, 125, 150,\
                                 175, 200, 300, 400, 500, 600, 700, 800, 900], dtype=object)
+        data_dbdt = data_dbdt/1000
         x           = test['x'][ii] #float(input("dbdt:"))
         dbdt_close  = (np.abs(data_dbdt - x)).argsort()[:2] # xに近い順にdbdtを2点取りだす
         dbdt_close  = np.sort(dbdt_close) # 取り出したdbdtを昇順にする
@@ -159,18 +160,17 @@ def saigen(Z):
         # yに近い順にBを2*2点取り出す
         B_close1    = (np.abs(Y[dbdt_close[0] * 800 : (dbdt_close[0] + 1) * 800] - y)).argsort()[:2] + dbdt_close[0] * 800
         B_close2    = (np.abs(Y[dbdt_close[1] * 800 : (dbdt_close[1] + 1) * 800] - y)).argsort()[:2] + dbdt_close[1] * 800
+        B_close1, B_close2 = np.sort(B_close1), np.sort(B_close2)
         
-        x1, y1, z1  = data_dbdt[dbdt_close[0]], Y[B_close1[0]], Z[B_close1[0]]
-        x1, y2, z2  = data_dbdt[dbdt_close[0]], Y[B_close1[1]], Z[B_close1[1]]
-        x2, y1, z3  = data_dbdt[dbdt_close[1]], Y[B_close2[0]], Z[B_close2[0]]
-        x2, y2, z4  = data_dbdt[dbdt_close[1]], Y[B_close2[1]], Z[B_close2[1]]
+        x1, y1, z1  = X[B_close1[0]], Y[B_close1[0]], Z[B_close1[0]]
+        x2, y2, z2  = X[B_close1[1]], Y[B_close1[1]], Z[B_close1[1]]
+        x3, y3, z3  = X[B_close2[0]], Y[B_close2[0]], Z[B_close2[0]]
+        x4, y4, z4  = X[B_close2[1]], Y[B_close2[1]], Z[B_close2[1]]
         
-        if y > (y2-y1)/(x2-x1) * (x-x1) + y1:
-            z = ((x1-x)*((y2-y1)*(z4-z1)-(y2-y1)*(z2-z1))+(y1-y)*((z2-z1)*(x2-x1))) / ((x1-x2)*(y2-y1)) + z1
+        if y > (y4-y1)/(x4-x1) * (x-x1) + y1:
+            z=((x1-x)*((y2-y1)*(z4-z1)-(y4-y1)*(z2-z1))+(y1-y)*((z2-z1)*(x4-x1)-(z4-z1)*(x2-x1)))/((x2-x1)*(y4-y1)-(x4-x1)*(y2-y1))+z1
         else:
-            z = ((x1-x)*((y2-y1)*(z3-z1))+(y1-y)*((z2-z1)*(x2-x1))) / ((x1-x2)*(y2-y1)) + z1
-        #x0 = np.append(x0, x)
-        #y0 = np.append(y0, y)
+            z=((x1-x)*((y2-y1)*(z3-z1)-(y3-y1)*(z2-z1))+(y1-y)*((z2-z1)*(x3-x1)-(z3-z1)*(x2-x1)))/((x2-x1)*(y3-y1)-(x3-x1)*(y2-y1))+z1
         z0 = np.append(z0, z)
     return (z0)
 
@@ -179,7 +179,7 @@ Y_T = np.concatenate((test['y'], -1 * test['y']))
 H_T = saigen(Hm_t) + saigen(Hh_t) + saigen(Hf_t)
 H_T = np.concatenate((H_T      , -1 * H_T))
 
-np.savetxt('saigen_Hm.csv', np.vstack((test['x'], test['y'], saigen(Hm_t))).transpose(),  delimiter=',')
+np.savetxt('saigen_Hm.csv', np.vstack((test['x'], test['y'], saigen(Hm_t))).transpose(), delimiter=',')
 np.savetxt('saigen_Hh.csv', np.vstack((test['x'], test['y'], saigen(Hh_t))).transpose(),  delimiter=',')
 np.savetxt('saigen_Hf.csv', np.vstack((test['x'], test['y'], saigen(Hf_t))).transpose(), delimiter=',')
 np.savetxt('saigen_H.csv' , np.vstack((X_T, Y_T, H_T)).transpose(), delimiter=',')
