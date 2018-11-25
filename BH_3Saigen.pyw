@@ -1,20 +1,20 @@
 import numpy as np # 数学ライブラリ
 import matplotlib.pyplot as plt # プロット
-from BH_1Calculate import jirotyo
-
 from scipy.interpolate import griddata
 
 table = np.genfromtxt("Table.csv", delimiter=",", dtype='float', skip_header=1, \
                          names=["dbdt", "B", "Hm", "Hh", "Hf", "Hhf"])
-zzz  = np.genfromtxt("t_and_N.csv", delimiter=",", dtype='float', skip_header=1, names=["t", "N"])
+zzz   = np.genfromtxt("t.csv", delimiter=",", dtype='float', skip_header=1, names=["t"])
 real  = np.genfromtxt("real.csv", delimiter=",", dtype='float', skip_header=1, \
                          names=["dbdt", "B", "H", "Hm", "Hhf"])
 
-# def saigen(Z):
-#     x, y = np.meshgrid(real['dbdt'], real['B'], sparse = True)
-#     z    = np.diag(griddata((table['dbdt'], table['B']), Z, (x, y), method='linear'))
-#     return (z)
+"""
+def saigen(Z):
+     x, y = np.meshgrid(real['dbdt'], real['B'], sparse = True)
+     z    = np.diag(griddata((table['dbdt'], table['B']), Z, (x, y), method='linear'))
+     return (z)
 
+"""
 def saigen(Z):
     x0 = y0 = z0 = np.empty(0)
     for ii in range(0, len(real)):
@@ -56,27 +56,22 @@ Hm, Hhf = exchange2(real['Hm'])  , exchange2(real['Hhf'])
 H       = exchange2(real['H'])
 
 # 再現
-Hm_T, Hhf_T = exchange2(saigen(table['Hm'])), exchange2(saigen(table['Hhf']))
-H_T = saigen(table['Hm']) + saigen(table['Hhf'])
-H_T = exchange2(H_T)
+Hm_sim  = exchange2(saigen(table['Hm']))
+Hhf_sim = exchange2(saigen(table['Hhf']))
+H_sim   = Hm_sim + Hhf_sim
 
 # --------- 描写 -----------
 fig = plt.figure(figsize=(10,4)) # グラフを表示する(5,4), (24,4)
 fig.subplots_adjust(wspace=0.3)
 
-i_m   = exchange2(real['Hm']) * jirotyo / zzz['N'][0]
-i_hf  = exchange2(real['Hhf']) * jirotyo / zzz['N'][0]
-i_ms  = Hm_T      * jirotyo / zzz['N'][0]
-i_hfs = Hhf_T     * jirotyo / zzz['N'][0]
-
 # iの成分
 ax4 = fig.add_subplot(1, 2, 2)
-ax4.plot(zzz['t'], i_m, marker="None", label="$i_m(real)$", color='b', linewidth = 0.5)
-ax4.plot(zzz['t'], i_ms, marker="None", label="$i_m$", color='skyblue', linewidth = 0.5)
-ax4.plot(zzz['t'], i_hf, marker="None", label="$i_h+i_f(real)$", color='purple', linewidth = 0.5)
-ax4.plot(zzz['t'], i_hfs, marker="None", label="$i_h+i_f$", color='pink', linewidth = 0.5)
+ax4.plot(zzz['t'], exchange2(real['Hm']), marker="None", label="$H_m$", color='skyblue', linewidth = 0.5)
+ax4.plot(zzz['t'], Hm_sim, marker="None", label="$H_m(Sim.)$", color='b', linewidth = 0.5)
+ax4.plot(zzz['t'], exchange2(real['Hhf']), marker="None", label="$H_h+H_f$", color='pink', linewidth = 0.5)
+ax4.plot(zzz['t'], Hhf_sim, marker="None", label="$H_h+H_f(Sim.)$", color='purple', linewidth = 0.5)
 ax5 = ax4.twinx()
-ax5.plot(zzz['t'], dbdt, marker="None", label="$dbdt$", color='r', linewidth = 0.5)
+ax5.plot(zzz['t'], dbdt, marker="None", label="$dbdt$", color='grey', linewidth = 0.5)
 ax5.axhline(y=5/1000, color='r', linestyle='--', linewidth = 0.5, alpha=0.4)
 ax5.axhline(y=10/1000, color='r', linestyle='--', linewidth = 0.5, alpha=0.4)
 ax5.axhline(y=20/1000, color='r', linestyle='--', linewidth = 0.5, alpha=0.4)
@@ -93,21 +88,26 @@ ax5.axhline(y=200/1000, color='r', linestyle='--', linewidth = 0.5, alpha=0.4)
 ax5.axhline(y=300/1000, color='r', linestyle='--', linewidth = 0.5, alpha=0.4) # 250
 ax5.axhline(y=400/1000, color='r', linestyle='--', linewidth = 0.5, alpha=0.4)
 ax5.axhline(y=500/1000, color='r', linestyle='--', linewidth = 0.5, alpha=0.4) # 500
+ax5.axhline(y=600/1000, color='r', linestyle='--', linewidth = 0.5, alpha=0.4) # 500
 ax4.set_xlabel("Time [$\mu$s]")
-ax4.set_ylabel("Current [A]")
+ax4.set_ylabel("H [A/m]")
 ax5.set_ylabel("dB/dt[T/s]")
 ax4.legend()
 ax4.grid(True), ax4.locator_params(axis='x', nbins=5)
-ax4.set_ylim(-0.2, 0.2)
+ax4.set_ylim(-30, 30)
+
+h1, l1 = ax4.get_legend_handles_labels()
+h2, l2 = ax5.get_legend_handles_labels()
+ax4.legend(h1+h2, l1+l2)
 
 # BHループ
 ax3 = fig.add_subplot(1, 2, 1) # 2行2列分割レイアウトの順序2にaxes追加
-ax3.plot(H,   B, marker="None", linewidth = 0.5, label="$H(real)$", color='orange')
-ax3.plot(H_T                  ,   B, marker="None", linewidth = 0.5, label="$H$", color='r')
-ax3.plot(Hm,  B, marker="None", linewidth = 0.5, label="$H_m(real)$", color='skyblue')
-ax3.plot(saigen(table['Hm']),  real['B'], marker="None", linewidth = 0.5, label="$H_m$", color='b')
-ax3.plot(Hhf, B, marker="None", linewidth = 0.5, label="$H_h+H_f(real)$", color='pink')
-ax3.plot(Hhf_T,                   B, marker="None", linewidth = 0.5, label="$H_h+H_f$", color='purple')
+ax3.plot(H,   B, marker="None", linewidth = 0.5, label="$H$", color='orange')
+ax3.plot(H_sim                  ,   B, marker="None", linewidth = 0.5, label="$H(Sim.)$", color='r')
+ax3.plot(Hm,  B, marker="None", linewidth = 0.5, label="$H_m$", color='skyblue')
+ax3.plot(saigen(table['Hm']),  real['B'], marker="None", linewidth = 0.5, label="$H_m(Sim.)$", color='b')
+ax3.plot(Hhf, B, marker="None", linewidth = 0.5, label="$H_h+H_f$", color='pink')
+ax3.plot(Hhf_sim,                   B, marker="None", linewidth = 0.5, label="$H_h+H_f(Sim.)$", color='purple')
 ax3.grid(True), ax3.locator_params(axis='x', nbins=5)
 ax3.set_xlim(-40, 40)
 ax3.set_xlabel("H(Magnetic field intensity) [A/m]")
