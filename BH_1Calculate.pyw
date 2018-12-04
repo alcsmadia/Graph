@@ -24,15 +24,15 @@ def fourier(i_data, t_data):
 
 # ----------- T/4で折りたたむ ---------
 def T4(B, B_begin, gu_ki):
-    B = np.concatenate((B[B_begin:], B[:B_begin]))
+    B = np.concatenate((B[B_begin:], B[:B_begin])) # B=0となる点を始点にする
     B1, B2, B3, B4 = np.split(B, 4)
 
     if gu_ki == "gukansu":
         B1 = (B1 + B2[::-1] - B3 - B4[::-1]) / 4
-        B = np.concatenate((B1, B1[::-1], -1 * B1, -1 * B1[::-1])) # 配列を逆にしたり反対にしたりしてつなげる
+        B = np.concatenate((-1 * B1[::-1], B1, B1[::-1], -1 * B1)) # 配列を逆にしたり反対にしたりしてつなげる
     else:
         B1 = (B1 - B2[::-1] - B3 + B4[::-1]) / 4
-        B = np.concatenate((B1, -1 * B1[::-1], -1 * B1, B1[::-1]))
+        B = np.concatenate((B1[::-1], B1, -1 * B1[::-1], -1 * B1))
     return (B)
 
 # ① 変数を設定 -------------------------------------------------------------------------
@@ -54,7 +54,7 @@ def read(j):
     point_float = T / dt  # 1周期ポイント数=全ポイント数/レンジ(個/秒)*周期(秒)
     point = int(round(point_float))  # 丸めてからint型に
     
-    point2 = 1600 # 1/4周期で平均をとるためのポイント数
+    point2 = 400 # 1/4周期で平均をとるためのポイント数
     dt2 = dt * point / point2
     return data, frequency, N, T, point, dt, dt2
     
@@ -78,14 +78,12 @@ def junbi(j):
 
 # ③-1 Bの計算 ---------------------------------------------------------------------------
 def keisan_B(VoltageT, TimeT):
-    v = fourier(VoltageT, TimeT)[0] + fourier(VoltageT, TimeT)[1]
-    int_v_dt = np.cumsum(v * dt2)
+    v = fourier(VoltageT, TimeT)[0] + fourier(VoltageT, TimeT)[1] # 奇関数成分と偶関数成分を足す
+    int_v_dt = np.cumsum(v * dt2) # 累積和の配列をとる
     B = int_v_dt / (N[2] * jiromenseki) * 10 ** -6  # NBA=∫vdt
     B = B - (B.max() + B.min()) / 2
-    B_begin = int(np.nanargmin(np.abs(B[:800])))
+    B_begin = int(np.nanargmin(np.abs(B[:half])))
     B = T4(B, B_begin, "gukansu")
-    v1, v2, v3, v4 = np.split(v, 4)     # 折りたたみの過程でiとずれてしまうので
-    v = np.concatenate((v2, v3, v4, v1))
     return v, B, B_begin
 
 # ③-2 Hの計算 ----------------------------------------------------------------------------
@@ -98,7 +96,6 @@ def keisan_H(CurrentT, TimeT):
     Hhf = i_hf * N[1] / jirotyo
     return i, i_m, i_hf, H, Hm, Hhf
 
-
 # ④-1 出力（グラフ描写） ------------------------------------------------------------------
 def graph():
     import matplotlib.pyplot as plt # プロット
@@ -108,17 +105,12 @@ def graph():
         "dB/dt={0} | Bm={1:.3g} mT | {2} | turns{3}:{4}"\
         .format(parameter(j, 3), B.max() * 1000, parameter(j, 2), N[1], N[2]))
 
-    """
-    kesson = np.where(np.abs(dbdt) < 0.9 * np.max(dbdt))
-    i_m[kesson], i_hf[kesson], i[kesson] = np.nan, v[kesson], Hh[kesson], Hf[kesson], Hm[kesson], H[kesson] = np.nan
-    #dbdt[kesson] = np.nan
-    """
-
     ax1 = fig.add_subplot(2, 2, 1)  # 2行2列分割レイアウトの順序1にaxes追加
     ax2 = ax1.twinx()  # ax2をax1に関連付ける
     ax1.set_title("↓フーリエ級数展開後↓", fontdict={'family': 'IPAexGothic'})
     ax1.plot(t, i, marker="None", label="Current", color='b', linewidth=0.5)
     ax2.plot(t, v, marker="None", label="Voltage", color='r', linewidth=0.5)
+    #ax2.plot(t, dbdt*1000, marker="None", label="dBdt", color='green', linewidth=0.5)
     ax1.grid(True), ax1.locator_params(axis='x', nbins=5)
     ax1.set_xlabel("Time [$\mu$s]")
     ax1.set_ylabel("Current [A]"), ax2.set_ylabel("Voltage [V]")
@@ -147,49 +139,53 @@ def graph():
     ax4.set_ylabel("Current [A]")
     ax4.grid(True), ax4.locator_params(axis='x', nbins=5)
     ax4.legend()
+    
+    ax5 = fig.add_subplot(2, 2, 4)
+    ax5.plot(t, dbdt*1000, marker="None", label="$i_m$", color='b', linewidth=0.5)
+    ax5.set_xlabel("Time [$\mu$s]")
+    ax5.set_ylabel("dbdt[mT/$\mu$s]")
+    ax5.grid(True), ax4.locator_params(axis='x', nbins=5)
+    ax5.legend()
 
     # 共通
     # fig.savefig("figure_{0:.4g}kHz.png".format(frequency))
     plt.show()
     
-# マイナス～プラスの周期取り出す（以下2つで使う）
+# マイナス～プラスの半周期取り出す（以下2つで使う）
 def exchange(B):
     B1, B2, B3, B4 = np.split(B, 4)
     return(np.concatenate((B4, B1)))
     
 # ⑤-2 出力（個別データ出力） ---------------------------------------------------------------
 def hozon(dbdt):
-    np.savetxt('real.csv', np.vstack((exchange(dbdt), exchange(B), exchange(H), \
+    np.savetxt('real.csv', np.vstack((-1 * t[:half][::-1], exchange(dbdt), exchange(B), exchange(H), \
                                       exchange(Hm), exchange(Hhf))).transpose(), delimiter=',', \
                fmt="%.6f", \
-               header="dBdt,B,H,Hm,Hhf", \
-               comments="")
-    np.savetxt('t.csv', t.transpose(), delimiter=',', \
-               fmt="%.6f", \
-               header="t", \
+               header="t, dBdt, B, H, Hm, Hhf", \
                comments="")
 
 # ⑥ テーブル作成 ---------------------------------------------------------------------------
-def table(dbdt, X, Y, Hm_t, Hh_t, Hf_t, Hhf_t):
+def table(dbdt, X, Y, Hm_t, Hh_t, Hf_t, Hhf_t, Bm):
     #dbdt0 = int(parameter(j, 3).replace("(", "").replace("mTµs)", "")) / 1000
     kesson = np.where(np.abs(dbdt) < 0.9 * np.max(dbdt)) # dbdtの最大値*0.9以下のインデックスを取得
-    dbdt[kesson] = np.nan # 欠損値にする
-    B[kesson] = np.nan
+    dbdt[kesson] = B[kesson] = np.nan # 欠損値にする
     
-    X = np.append(X, exchange(dbdt)) # X = np.append(X, np.full(800, dbdt0)) #
+    X  = np.append(X, exchange(dbdt)) # X = np.append(X, np.full(half, dbdt0)) # 
     Y = np.append(Y, exchange(B))
     Hm_t = np.append(Hm_t, exchange(Hm))
     Hh_t = np.append(Hh_t, exchange(Hh))
     Hhf_t = np.append(Hhf_t, exchange(Hhf))
     if j != 1:
         Hf_t = np.append(Hf_t, exchange(Hf))
-    return X, Y, Hm_t, Hh_t, Hf_t, Hhf_t
+    Bm = np.append(Bm, np.full(half, np.nanmax(B))) # NaNを除いて最大値を計算
+    return X, Y, Hm_t, Hh_t, Hf_t, Hhf_t, Bm
 
 # 本体 ----------------------------------------------------------------------------------------
 jirotyo, jiromenseki = 0.031852683, 0.00001207  # エクセルでは外径と内径から計算している
 # jirotyo, jiromenseki = 0.0635, 0.0000654
 
-X = Y = Hm_t = Hhf_t = Hh_t = Hf_t = np.empty(0)
+half = 200
+X = Y = Hm_t = Hhf_t = Hh_t = Hf_t = Bm = np.empty(0)
 for j in range(1, len(sys.argv)):
     data, frequency, N, T, point, dt, dt2 = read(j)
     VoltageT, CurrentT, TimeT, t = junbi(j)
@@ -206,5 +202,5 @@ for j in range(1, len(sys.argv)):
         graph()
         if len(sys.argv) == 2: hozon(dbdt)
     if __name__ == 'BH_1Calculate':
-        X, Y, Hm_t, Hh_t, Hf_t, Hhf_t = \
-        table(dbdt, X, Y, Hm_t, Hh_t, Hf_t, Hhf_t)
+        X, Y, Hm_t, Hh_t, Hf_t, Hhf_t, Bm = \
+        table(dbdt, X, Y, Hm_t, Hh_t, Hf_t, Hhf_t, Bm)
